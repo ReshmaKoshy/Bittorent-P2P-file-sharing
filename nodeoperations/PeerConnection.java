@@ -8,7 +8,9 @@ public class PeerConnection {
     private int remotePeerId;        
     private Socket connectionSocket;  
     private byte[] remotePeerBitfield;      
-    private boolean isRemotePeerInterested;  
+    private boolean isRemotePeerInteresting;
+    private boolean isRemotePeerInterested;
+    private boolean isChoked;
 
     // Constructor to initialize peer connection
     public PeerConnection(int ownPeerId, int remotePeerId, Socket connectionSocket) {
@@ -16,7 +18,9 @@ public class PeerConnection {
         this.remotePeerId = remotePeerId;
         this.connectionSocket = connectionSocket;
         this.remotePeerBitfield = new byte[0]; // Initialize bitfield as an empty byte array
-        this.isRemotePeerInterested = false;    // Default interest status
+        this.isRemotePeerInteresting = false;    // Default interest status
+        this.isRemotePeerInterested = false;
+        this.isChoked = true;
     }
 
     // Getter for the remote peer ID
@@ -25,7 +29,7 @@ public class PeerConnection {
     }
 
 
-    // Getter for the connection socket
+    // Getter for the connection connectionSocket
     public Socket getConnectionSocket() {
         return connectionSocket;
     }
@@ -41,18 +45,34 @@ public class PeerConnection {
     }
 
     // Getter for the interest status of the peer
-    public boolean isRemotePeerInterested() {
-        return isRemotePeerInterested;
+    public boolean isRemotePeerInteresting() {
+        return isRemotePeerInteresting;
     }
 
     // Setter for the interest status of the peer
-    public void setPeerInterested(boolean isRemotePeerInterested) {
-        this.isRemotePeerInterested = isRemotePeerInterested;
+    public void setPeerInterested(boolean isRemotePeerInteresting) {
+        this.isRemotePeerInteresting = isRemotePeerInteresting;
     }
 
     // Getter for the local peer ID
     public int getLocalPeerId() {
         return ownPeerId;
+    }
+
+    public boolean isRemotePeerInterested() {
+        return isRemotePeerInterested;
+    }
+
+    public void setRemotePeerInterested(boolean remotePeerInterested) {
+        this.isRemotePeerInterested = remotePeerInterested;
+    }
+
+    public boolean isChoked() {
+        return isChoked;
+    }
+
+    public void setChoked(boolean choked) {
+        this.isChoked = choked;
     }
 
 }

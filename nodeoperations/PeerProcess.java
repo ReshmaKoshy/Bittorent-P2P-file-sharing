@@ -3,31 +3,37 @@ package nodeoperations;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.LinkedList;
 
-import nodeoperations.BitField;
-import nodeoperations.Piece;
+//import nodeoperations.BitField;
+//import nodeoperations.Piece;
+//import nodeoperations.OutMessage;
 import networkoperations.PeerServer;
 import networkoperations.PeerConnectionHandler;
 import fileparsers.PeerConfigurationReader;
 import fileparsers.FileChunkReader;
 import fileparsers.PeerInfoFileParse;
+import fileparsers.StatusLogger;
 
 public class PeerProcess {
 
     // Configuration and state variables
-    private static String targetFileName;
     private long totalFileSize;
     private long chunkSize;
     private int totalPieces;
     private int peerID;
     private int port;
     private boolean hasFullFile;
+    public static String targetFileName;
 
     // Static collections for peers and pieces
-    public static ArrayList<PeerConnection> peers = new ArrayList<>();
+    public static ArrayList<PeerConnection> peers = new ArrayList<PeerConnection>();
     public static ArrayList<Integer> allPeerIDs;
     public static Map<Integer, Piece> chunkIndexPieceMap = new HashMap<>();
-
+    
+    public static LinkedList<OutMessage> outgoingMessageQueue = new LinkedList<OutMessage>();
+    public static ArrayList<FileDownloadStatus> hasDownloadedFullFile = new ArrayList<FileDownloadStatus>();
+    
     public static void main(String[] args) {
         PeerProcess peerProcess = new PeerProcess();
         peerProcess.initialize(args);
@@ -65,6 +71,8 @@ public class PeerProcess {
         peerID = peerInfo.getOwnPeerId();
         port = peerInfo.getPort();
         hasFullFile = peerInfo.isFullFile();
+
+        StatusLogger.startLogger(peerId);
     }
 
     private void setBitField() {

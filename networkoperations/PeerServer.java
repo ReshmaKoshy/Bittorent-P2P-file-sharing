@@ -6,11 +6,19 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.net.ServerSocket;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Random;
 
 import nodeoperations.PeerConnection; 
 import nodeoperations.Handshake; 
 import nodeoperations.BitField; 
-import nodeoperations.PeerProcess; 
+import nodeoperations.PeerProcess;
+import nodeoperations.FileDownloadStatus;
+import nodeoperations.OutMessage;
+import nodeoperations.Choke;
+import nodeoperations.Unchoke;
+import fileparsers.StatusLogger;
+
 
 //Class will enable PeerConnection to function as a Server
 public class PeerServer extends Thread{
@@ -42,8 +50,8 @@ public class PeerServer extends Thread{
 
 
         try (ServerSocket server = new ServerSocket(portno)) {
-            //server socket created to listen for incoming connections on specified portno.
-
+            //server connectionSocket created to listen for incoming connections on specified portno.
+            new Thread(new ChokeStatusUpdater()).start();
             //Server needs to keep accepting connections
             while(true){
                 try{
@@ -52,8 +60,8 @@ public class PeerServer extends Thread{
 
                     if(canContinue)
                     {
-        
-                        PeerConnection p = new PeerConnection(self_ID, peerId, peerSocket); 
+
+                        PeerConnection p = new PeerConnection(self_ID, peerId, peerSocket);
 
                         try{
                             exchangeBitfields(peerSocket,p);
@@ -62,10 +70,16 @@ public class PeerServer extends Thread{
                         }
 
                         System.out.println("Finished exchange of Bit fields and Handshake");
-                        PeerProcess.peers.add(p); 
+                        PeerProcess.peers.add(p);
+                        StatusLogger.madeTCPConnection(peerId);
 
+                        FileDownloadStatus completeFile = new FileDownloadStatus();
+                        completeFile.setConnectionSocket(peerSocket);
+                        completeFile.setFullFileDownloadComplete(false);
 
-                        //startCommunicationThreads(peerId, peerSocket);
+                          PeerProcess.hasDownloadedFullFile.add(completeFile);
+
+                        startCommunicationThreads(peerId, peerSocket);
                     }
                     else{
                         System.out.println("Not a valid peer");
@@ -131,10 +145,11 @@ public class PeerServer extends Thread{
 
     }
 
-
-//    private void startCommunicationThreads(int peerId, Socket socket) {
-//        //Add logic for messaging
-//    }
+    private void startCommunicationThreads(int peerId, Socket connectionSocket) {
+          new OutboundMessageHandler().start();
+          new RequestHandler(peerId, totalChunks, allChunksPresent, fileSize, chunkSize).start();
+          new IncomingMessageHandler(connectionSocket, chunkSize).start();
+    }
 
     private void exchangeBitfields(Socket peerSocket, PeerConnection peer) throws IOException {
         ObjectOutputStream out = null;
@@ -151,7 +166,70 @@ public class PeerServer extends Thread{
         }catch (Exception e) {
             throw new IOException("Invalid bitfield format", e);
         }     
-    }  
+    }
+
+    // Global thread that updates the choke status for peers
+    private class ChokeStatusUpdater implements Runnable {
+        private static final int K = 500; 
+
+        @Override
+        public void run() {
+            Random rand = new Random();
+            int j=0;
+            while (true) {
+                try {
+                    // Wait for 'K' milliseconds
+                    Thread.sleep(K);
+
+                    // Find all interested peers
+                    ArrayList<PeerConnection> interestedPeers = new ArrayList<>();
+                    synchronized (PeerProcess.peers)
+                    {
+                        for (PeerConnection peer : PeerProcess.peers) {
+                            if (peer.isRemotePeerInterested()) {
+                                interestedPeers.add(peer);
+                            }
+                        }
+
+                        if (interestedPeers.size() > 0) {
+
+                            int k = 2;
+
+                            ArrayList<PeerConnection> selectedPeers = new ArrayList<>();
+                            for (int i = 0; i < interestedPeers.size(); i++){
+                                selectedPeers.add(interestedPeers.get(i));
+                               }
+                        // Set choke status
+                        for (PeerConnection peer : PeerProcess.peers) {
+                            if (selectedPeers.contains(peer)) {
+                                peer.setChoked(false);
+                                synchronized (PeerProcess.outgoingMessageQueue) {
+                                    OutMessage messageToSend = new OutMessage();
+                                    messageToSend.setConnectionSocket(peer.getConnectionSocket());
+                                    messageToSend.setMessage((new Unchoke()).unchoke);
+                                    PeerProcess.outgoingMessageQueue.add(messageToSend);
+                                }
+                            } else {
+                                peer.setChoked(true);
+                                synchronized (PeerProcess.outgoingMessageQueue) {
+                                    OutMessage messageToSend = new OutMessage();
+                                    messageToSend.setConnectionSocket(peer.getConnectionSocket());
+                                    messageToSend.setMessage((new Choke()).choke);
+                                    PeerProcess.outgoingMessageQueue.add(messageToSend);
+                                }
+                            }
+                        }
+
+
+                        }
+                    }
+
+                } catch (InterruptedException e) {
+                    System.err.println("ChokeStatusUpdater interrupted: " + e.getMessage());
+                }
+            }
+        }
+    }
 
 
 }

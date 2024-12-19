@@ -12,7 +12,10 @@ import nodeoperations.Handshake;
 import nodeoperations.PeerConnection;
 import nodeoperations.PeerProcess;
 import nodeoperations.BitField;
+import nodeoperations.FileDownloadStatus;
 import fileparsers.PeerInfoFileParse;
+import fileparsers.StatusLogger;
+
 
 public class PeerConnectionHandler extends Thread {
 
@@ -110,11 +113,18 @@ public class PeerConnectionHandler extends Thread {
         
         int remotePeerId = Integer.parseInt(peerInfo[0]);
         logConnection(remotePeerId);
-        //startCommunicationThreads(remotePeerId);
+
+        FileDownloadStatus completeFile = new FileDownloadStatus();
+        completeFile.setConnectionSocket(connectionSocket);
+        completeFile.setFullFileDownloadComplete(false);
+
+        PeerProcess.hasDownloadedFullFile.add(completeFile);
+
+        startCommunicationThreads(remotePeerId,connectionSocket);
     }
 
-    private PeerConnection createPeerConnection(Socket socket, String[] peerInfo) {
-        PeerConnection peerConnection = new PeerConnection(localPeerId, Integer.parseInt(peerInfo[0]), socket);
+    private PeerConnection createPeerConnection(Socket connectionSocket, String[] peerInfo) {
+        PeerConnection peerConnection = new PeerConnection(localPeerId, Integer.parseInt(peerInfo[0]), connectionSocket);
         return peerConnection;
     }
 
@@ -134,24 +144,27 @@ public class PeerConnectionHandler extends Thread {
     private void logConnection(int remotePeerId) {
         System.out.println("Connection request sent to " + remotePeerId);
         System.out.println();
+        StatusLogger.makeTCPConnection(remotePeerId);
     }
 
-//    private void startCommunicationThreads(int remotePeerId) {
+    private void startCommunicationThreads(int remotePeerId, Socket connectionSocket) {
+        new OutboundMessageHandler().start();
+        new RequestHandler(remotePeerId, totalFileChunks, isFileComplete, totalFileSize, chunkSize).start();
+        new IncomingMessageHandler(connectionSocket, chunkSize).start();
+    }
 
-//    }
-
-    private void sendBitfield(Socket socket) {
+    private void sendBitfield(Socket connectionSocket) {
         try {
-            ObjectOutputStream outputStream = new ObjectOutputStream(socket.getOutputStream());
+            ObjectOutputStream outputStream = new ObjectOutputStream(connectionSocket.getOutputStream());
             outputStream.writeObject(BitField.bitfield);
         } catch (IOException e) {
             System.err.println("Error sending bitfield: " + e);
         }
     }
 
-    private byte[] receiveBitfield(Socket socket) {
+    private byte[] receiveBitfield(Socket connectionSocket) {
         try {
-            ObjectInputStream inputStream = new ObjectInputStream(socket.getInputStream());
+            ObjectInputStream inputStream = new ObjectInputStream(connectionSocket.getInputStream());
             return (byte[]) inputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("Error receiving bitfield: " + e);
@@ -159,18 +172,18 @@ public class PeerConnectionHandler extends Thread {
         }
     }
 
-    private void sendHandshakeMessage(Socket socket, byte[] handshake) {
+    private void sendHandshakeMessage(Socket connectionSocket, byte[] handshake) {
         try {
-            ObjectOutputStream outputStream = new ObjectOutputStream(socket.getOutputStream());
+            ObjectOutputStream outputStream = new ObjectOutputStream(connectionSocket.getOutputStream());
             outputStream.writeObject(handshake);
         } catch (IOException e) {
             System.err.println("Error sending handshake: " + e);
         }
     }
 
-    private byte[] receiveHandshakeMessage(Socket socket) {
+    private byte[] receiveHandshakeMessage(Socket connectionSocket) {
         try {
-            ObjectInputStream inputStream = new ObjectInputStream(socket.getInputStream());
+            ObjectInputStream inputStream = new ObjectInputStream(connectionSocket.getInputStream());
             return (byte[]) inputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("Error receiving handshake: " + e);
